@@ -6,17 +6,79 @@ from tkinter import messagebox, simpledialog
 from time import sleep
 import math
 
-# Connect to the robot arm, if connection fails, run in demo mode
-try:
-    from dobot_util import Dobot
-    robot = Dobot("192.168.1.6", logging=True)
-    ROBOT_CONNECTED = True
-    print("Robot connected successfully!")
-except Exception as e:
-    print(f"Robot connection failed: {e}")
-    print("Running in demo mode - robot commands will be simulated")
-    robot = None
-    ROBOT_CONNECTED = False
+import numpy as np
+import math
+from dobot_util import Dobot
+
+# Ported directly from HongboRobot_ActualRobot_AI_Points.m
+DRAWING_POINTS = np.array([
+    [230, -30], [240, -30], [255, -30], [270, -30], [285, -30], 
+    [300, -30], [315, -30], [330, -30], [345, -30], [360, -30],
+    # ... add the rest of the matrix from the .m file here
+])
+
+class RobotManager:
+    def __init__(self, ip="192.168.1.6", urdf_path=None):
+        self.ip = ip
+        # Simulator support remains: if urdf_path is provided, it uses the sim
+        self.robot = Dobot(self.ip, urdf_file=urdf_path)
+
+    def boot_robot(self):
+        """The required 'Dashboard' setup for the physical robot"""
+        self.robot.dashboard.clear_error()
+        self.robot.dashboard.enable()
+        print("Robot motors enabled and errors cleared.")
+
+    def run_drawing(self):
+        self.boot_robot()
+        
+        for pt in DRAWING_POINTS:
+            # Using your existing Ikinematics function
+            joints = Ikinematics(pt[0], pt[1], z=200.0) 
+            
+            # Send to robot or simulator
+            self.robot.movement.joint_mov_j(joints)
+            
+            # Optional: if using simulator, you can call self.robot.movement.simulator.compute()
+            
+        self.robot.movement.sync() # Final check
+
+import numpy as np
+import math
+from time import sleep
+
+# Global variables for state tracking
+robot = None
+ROBOT_CONNECTED = False
+
+def initialize_robot(ip="192.168.1.6"):
+    global robot, ROBOT_CONNECTED
+    try:
+        from dobot_util import Dobot
+        print(f"Attempting to connect to robot at {ip}...")
+        
+        # 1. Establish Network Connection
+        robot = Dobot(ip, logging=True)
+        
+        # 2. Bootup Handshake (Critical for Physical Robot)
+        # Clear existing alarms and power on the motors
+        robot.dashboard.clear_error()
+        sleep(0.5)
+        robot.dashboard.enable()
+        
+        ROBOT_CONNECTED = True
+        print("Robot connected and enabled successfully!")
+        return True
+
+    except Exception as e:
+        print(f"Robot connection failed: {e}")
+        print("Running in demo mode - robot commands will be simulated")
+        robot = None
+        ROBOT_CONNECTED = False
+        return False
+
+# Call the function immediately to maintain original behavior
+initialize_robot("192.168.1.6")
 
 # Calculate inverse kinematics for a 2-link planar arm
 def Ikinematics(x, y, z=200.0, r=0.0):

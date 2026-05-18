@@ -44,16 +44,19 @@ class InfoFrame(customtkinter.CTkFrame):
         # Upload Button
         self.upload_button = customtkinter.CTkButton(self, text="Upload", command=self.upload)
         self.upload_button.grid(row=3, column=5, padx=10, pady=10, sticky="ew")
-
+    
     def upload(self):
-        x = self.x_input.get()
-        y = self.y_input.get()
-        z = self.z_input.get()
-        state = self.state_var.get()
-
-        if x and y and z:
-            command_text = f"({x}, {y}, {z}) -- ({state})"
-            self.point_frame.add_command(command_text)
+        # Get IP from the GUI entry box or use default
+        target_ip = self.x_input.get() or "192.168.1.6"
+        
+        # Call the initialization function from main.py
+        # This will clear errors and enable the robot hardware
+        success = initialize_robot(target_ip)
+        
+        if success:
+            self.point_frame.update_commands(f"System: {target_ip} Connected & Enabled")
+        else:
+            self.point_frame.update_commands("System: Demo Mode (No Hardware Found)")
 
 
 class GraphFrame(customtkinter.CTkFrame):
