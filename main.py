@@ -57,8 +57,9 @@ class RobotManager:
 
     def boot_robot(self):
         """Dashboard handshake for physical robot initialization"""
-        self.robot.dashboard.clear_error()
-        self.robot.dashboard.enable()
+        print("here")
+        self.robot.dashboard.ClearError()
+        self.robot.dashboard.EnableRobot()
         print("Robot motors enabled.")
 
     def run_drawing(self):
@@ -88,6 +89,7 @@ ROBOT_CONNECTED = False
 
 def initialize_robot(ip="192.168.1.6"):
     global robot, ROBOT_CONNECTED
+
     try:
         from dobot_util import Dobot
         print(f"Attempting to connect to robot at {ip}...")
@@ -97,9 +99,12 @@ def initialize_robot(ip="192.168.1.6"):
         
         # 2. Bootup Handshake (Critical for Physical Robot)
         # Clear existing alarms and power on the motors
-        robot.dashboard.clear_error()
+        print("here2 ")
+        robot.dashboard.send_command("ClearError()")
         sleep(0.5)
+        print("Here3")
         robot.dashboard.enable()
+        sleep(3)
         
         ROBOT_CONNECTED = True
         print("Robot connected and enabled successfully!")
@@ -144,7 +149,7 @@ def Ikinematics(x, y, z=200.0, r=0.0):
     D = (x**2 + y**2 - L1**2 - L2**2) / (2 * L1 * L2)
     if abs(D) > 1:
         raise ValueError("Target position out of reach")
-    
+    D = max(-1,min(1,D))
     theta2 = math.atan2(math.sqrt(1 - D**2), D)
     theta1 = math.atan2(y, x) - math.atan2(L2 * math.sin(theta2), L1 + L2 * math.cos(theta2))
 
@@ -152,12 +157,24 @@ def Ikinematics(x, y, z=200.0, r=0.0):
     j1 = math.degrees(theta1)
     j2 = math.degrees(theta2)
 
-    # --- JOINT CHECK (Recommended Mode) ---
     if STRICT_JOINT_CHECKING:
-        if not (J1_MIN <= j1 <= J1_MAX):
-            raise ValueError(f"J1 angle ({j1:.1f}°) exceeds hardware limit")
-        if not (J2_MIN <= j2 <= J2_MAX):
-            raise ValueError(f"J2 angle ({j2:.1f}°) exceeds hardware limit")
+        # check if orgional position is outside limits 
+        if not (J1_MIN <= j1 <= J1_MAX and J2_MIN <= j2 <= J2_MAX):
+            # try flipping the elbow
+            theta2_alt = math.atan2(-math.sqrt(1- D**2),D)
+            theta1_alt = math.atan2(y,x) - math.atan2(L2* math.sin(theta2_alt), L1 + L2 * math.cos(theta2_alt))
+            j1_alt , j2_alt = math.degrees(theta1_alt) , math.degrees(theta2_alt)
+            # checks if flipping the elbow works
+            if ( J1_MIN <= j1_alt <= J1_MAX and J2_MIN <= j2_alt <= J2_MAX):
+                j1 , j2 = j1_alt,j2_alt
+            else:
+                # if both fail raise a value error
+                raise ValueError(f"No Valid joint configuations within limits for  ({x},{y})")
+    # even though this is mainly for the new mode this also checks for old just in case 
+    if not (J1_MIN <= j1 <= J1_MAX):
+        raise ValueError(f"J1 angle ({j1:.1f}°) exceeds hardware limit")
+    if not (J2_MIN <= j2 <= J2_MAX):
+        raise ValueError(f"J2 angle ({j2:.1f}°) exceeds hardware limit")
 
     if not (Z_MIN <= z <= Z_MAX):
         raise ValueError(f"Z height ({z}) out of range")
@@ -700,3 +717,4 @@ instructions = tk.Label(frame, text="Instructions:\n1. Click points on plot OR\n
 instructions.pack(pady=10)
 
 root.mainloop()
+
