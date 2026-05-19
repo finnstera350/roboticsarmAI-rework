@@ -10,38 +10,73 @@ import numpy as np
 import math
 from dobot_util import Dobot
 
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import tkinter as tk
+from tkinter import messagebox, simpledialog
+from time import sleep
+import math
+from dobot_util import Dobot
+
 # Ported directly from HongboRobot_ActualRobot_AI_Points.m
 DRAWING_POINTS = np.array([
-    [230, -30], [240, -30], [255, -30], [270, -30], [285, -30], 
-    [300, -30], [315, -30], [330, -30], [345, -30], [360, -30],
-    # ... add the rest of the matrix from the .m file here
+    [230, -30], [240, -30], [255, -30], [270, -30], [285, -30], [300, -30], [315, -30], [330, -30], [345, -30], [360, -30],
+    [360, -20], [360, -5], [360, 10], [360, 25], [360, 40], [360, 55], [360, 70], [360, 85],
+    [355, 90], [350, 95], [345, 100], [348, 105], [352, 110], [350, 115], [345, 120], [340, 125],
+    [338, 130], [340, 135], [345, 140], [348, 145],
+    [350, 140], [352, 130], [352, 115], [352, 95], [352, 75], [352, 55], [352, 35], [352, 15], [352, -5],
+    [340, -5], [340, 10], [340, 30], [340, 50], [340, 70], [340, 90], [338, 105], [336, 115], [332, 120],
+    [330, 118], [328, 110], [326, 98], [326, 80], [326, 60], [326, 40], [326, 20],
+    [320, 20], [315, 22], [310, 25], [305, 32], [302, 40], [300, 52], [298, 40], [295, 32], [290, 25],
+    [285, 22], [280, 20],
+    [275, 20], [274, 35], [273, 50], [272, 70], [270, 90], [268, 110], [266, 120],
+    [264, 110], [262, 95], [262, 70], [262, 45], [262, 20],
+    [260, 20], [250, 20], [240, 20],
+    [240, -5], [240, 15], [240, 35], [240, 55], [240, 75], [240, 95], [240, 115],
+    [238, 125], [235, 130], [232, 135], [235, 140], [238, 145],
+    [240, 140], [242, 130], [244, 115], [244, 95], [244, 75], [244, 55], [244, 35], [244, 15], [244, -5],
+    [230, -5], [230, 10], [230, 30], [230, 50], [230, 70], [230, 85],
+    [235, 90], [240, 95], [245, 100], [250, 105], [248, 110], [244, 115], [242, 120], [240, 125],
+    [238, 130], [240, 135], [245, 140], [248, 145],
+    [250, 140], [252, 130], [254, 115], [254, 95], [254, 75], [254, 55], [254, 35], [254, 15], [254, -5],
+    [260, -5], [275, -5], [290, -5], [300, -5], [310, -5], [325, -5], [340, -5],
+    [300, 10], [295, 15], [290, 22], [288, 32], [290, 42], [295, 50], [300, 55],
+    [305, 50], [310, 42], [312, 32], [310, 22], [305, 15], [300, 10],
+    [290, 60], [285, 65], [280, 70], [278, 80], [280, 90], [285, 98], [290, 102],
+    [295, 104], [300, 105], [305, 104], [310, 102], [315, 98], [320, 90], [322, 80], [320, 70],
+    [315, 65], [310, 60], [305, 58], [300, 57], [295, 58], [290, 60],
+    [265, 30], [275, 40], [285, 50], [300, 65], [315, 50], [325, 40], [335, 30],
+    [360, -30], [300, -30], [230, -30]
 ])
 
 class RobotManager:
     def __init__(self, ip="192.168.1.6", urdf_path=None):
         self.ip = ip
-        # Simulator support remains: if urdf_path is provided, it uses the sim
-        self.robot = Dobot(self.ip, urdf_file=urdf_path)
+        self.robot = Dobot(self.ip, urdf_file=urdf_path) #
 
     def boot_robot(self):
-        """The required 'Dashboard' setup for the physical robot"""
+        """Dashboard handshake for physical robot initialization"""
         self.robot.dashboard.clear_error()
         self.robot.dashboard.enable()
-        print("Robot motors enabled and errors cleared.")
+        print("Robot motors enabled.")
 
     def run_drawing(self):
         self.boot_robot()
-        
-        for pt in DRAWING_POINTS:
-            # Using your existing Ikinematics function
-            joints = Ikinematics(pt[0], pt[1], z=200.0) 
+        for i, pt in enumerate(DRAWING_POINTS):
+            # Penal height management: lift pen for move to start, lower for drawing
+            z_height = 245.0 if i == 0 or i == (len(DRAWING_POINTS) - 1) else 220.0
             
-            # Send to robot or simulator
+            # Use original Ikinematics function
+            joints = Ikinematics(pt[0], pt[1], z=z_height) 
+            
+            # Send movement command to robot
             self.robot.movement.joint_mov_j(joints)
+            print(f"Drawing point {i+1}/{len(DRAWING_POINTS)}: {pt}")
             
-            # Optional: if using simulator, you can call self.robot.movement.simulator.compute()
-            
-        self.robot.movement.sync() # Final check
+        self.robot.movement.sync()
+        print("Drawing complete.")
+
 
 import numpy as np
 import math
@@ -81,52 +116,81 @@ def initialize_robot(ip="192.168.1.6"):
 initialize_robot("192.168.1.6")
 
 # Calculate inverse kinematics for a 2-link planar arm
+# --- CONFIGURATION TOGGLE ---
+# False = Original Way (Checks X and Y values directly)
+# True  = Newer Way (Checks calculated J1/J2 angles against degree limits)
+STRICT_JOINT_CHECKING = True 
+
+# CONFIGURATION TOGGLE
+# Set to True to allow coordinates like 300 or 400 by checking angles instead of mm
+STRICT_JOINT_CHECKING = True 
+
 def Ikinematics(x, y, z=200.0, r=0.0):
     L1 = 200.0  # Length of first arm segment
     L2 = 200.0  # Length of second arm segment
 
-    # Set Limitiations for the arm
-    J1_min, J1_max = -85.0, 85.0
-    J2_min, J2_max = -135.0, 135.0
-    z_min, z_max = 5.0, 245.0
+    # Physical Joint Limits for Dobot M1 Pro
+    J1_MIN, J1_MAX = -85.0, 85.0
+    J2_MIN, J2_MAX = -135.0, 135.0
+    Z_MIN, Z_MAX = 5.0, 245.0
 
-    # Check if the target position is within the arm's reach and limits
-    if not (J1_min <= x <= J1_max and J2_min <= y <= J2_max and z_min <= z <= z_max):
-        raise ValueError("Target position out of reach or exceeds joint limits")
-    
+    # --- COORDINATE CHECK (Reverted Mode) ---
+    if not STRICT_JOINT_CHECKING:
+        # This will fail for any point where X or Y > 85
+        if not (-85.0 <= x <= 85.0 and -135.0 <= y <= 135.0):
+            raise ValueError(f"Target ({x}, {y}) blocked by X/Y coordinate check (reverted mode)")
+
     # Inverse kinematics calculations
     D = (x**2 + y**2 - L1**2 - L2**2) / (2 * L1 * L2)
     if abs(D) > 1:
         raise ValueError("Target position out of reach")
+    
     theta2 = math.atan2(math.sqrt(1 - D**2), D)
     theta1 = math.atan2(y, x) - math.atan2(L2 * math.sin(theta2), L1 + L2 * math.cos(theta2))
 
     # Convert radians to degrees
-    theta1_deg = math.degrees(theta1)
-    theta2_deg = math.degrees(theta2)
+    j1 = math.degrees(theta1)
+    j2 = math.degrees(theta2)
 
-    # A list of parameters for the robot
-    parameters = [theta1_deg, theta2_deg, z, 0]
-    return parameters
+    # --- JOINT CHECK (Recommended Mode) ---
+    if STRICT_JOINT_CHECKING:
+        if not (J1_MIN <= j1 <= J1_MAX):
+            raise ValueError(f"J1 angle ({j1:.1f}°) exceeds hardware limit")
+        if not (J2_MIN <= j2 <= J2_MAX):
+            raise ValueError(f"J2 angle ({j2:.1f}°) exceeds hardware limit")
+
+    if not (Z_MIN <= z <= Z_MAX):
+        raise ValueError(f"Z height ({z}) out of range")
+
+    # FIX: Return a list containing the solution list to satisfy the 'sols[0]' unpacking
+    return [[j1, j2, z, r]]
+
+# Example Usage:
+# If you want to use the Cathedral points (which are > 85), 
+# you will need to set STRICT_JOINT_CHECKING = True at the top.
 
 # ---- Robot Control Function ----
 def move_to_point(x, y, z=200, r=0):
-    sols = Ikinematics(x, y, z, r)
-    if ROBOT_CONNECTED and robot:
-        robot.dashboard.enable()
-        if sols:
-            j1, j2, z, r = sols[0]  # choose first valid solution
-            print(f"Moving to ({x},{y},{z},{r}) with joints J1={j1:.1f}°, J2={j2:.1f}°")
-            robot.movement.joint_to_joint_move([j1,j2,z,r])
+    try:
+        sols = Ikinematics(x, y, z, r)
+        
+        if not sols:
+            print(f"Target ({x}, {y}) is unreachable.")
+            return
+
+        # Now this unpacking will work because sols is [[...]]
+        j1, j2, z_target, r_target = sols[0]
+
+        if ROBOT_CONNECTED and robot:
+            robot.dashboard.enable()
+            print(f"Moving to ({x},{y}) | Joints: J1={j1:.1f}°, J2={j2:.1f}°")
+            robot.movement.joint_to_joint_move([j1, j2, z_target, r_target])
         else:
-            print(f"Unreachable target: ({x},{y},{z},{r})")
-            robot.dashboard.disable()
-    else:
-        if sols:
-            j1, j2, z, r = sols[0]  # choose first valid solution
-            print(f"DEMO MODE: Would move to ({x},{y},{z},{r}) with joints J1={j1:.1f}°, J2={j2:.1f}°")
-        else:
-            print(f"DEMO MODE: Unreachable target: ({x},{y},{z},{r})")
+            print(f"DEMO MODE: Target ({x}, {y}) -> Joints J1={j1:.1f}°, J2={j2:.1f}°")
+            
+    except Exception as e:
+        print(f"Robot command failed: {e}")
+
 
 limit = 450
 x = np.linspace(-limit, limit, 1000)
@@ -524,67 +588,77 @@ test_points_button = tk.Button(frame, text="Add Test Points", command=add_test_p
 test_points_button.pack(pady=5)
 
 # Custom dialog for Z-value and claw state
+
 def get_point_settings(px, py):
+    # Create the popup window
     dialog = tk.Toplevel(root)
     dialog.title("Point Settings")
-    dialog.geometry("300x200")
+    dialog.geometry("300x250")
     dialog.transient(root)
-    dialog.grab_set()
+    dialog.grab_set()  # Forces user to interact with this window before the main one
     
-    # Center the dialog
+    # Center the dialog on screen
     dialog.update_idletasks()
     x = (dialog.winfo_screenwidth() // 2) - (300 // 2)
-    y = (dialog.winfo_screenheight() // 2) - (200 // 2)
-    dialog.geometry(f"300x200+{x}+{y}")
+    y = (dialog.winfo_screenheight() // 2) - (250 // 2)
+    dialog.geometry(f"300x250+{x}+{y}")
     
-    result = {'z': None, 'claw': None}
+    # Initialize the result dictionary
+    result = {'z': None, 'claw': 0}
     
-    # Title
-    tk.Label(dialog, text=f"Settings for point ({px:.2f}, {py:.2f})", font=("Arial", 12, "bold")).pack(pady=10)
+    # CRITICAL: This variable tells the code when the "Add Point" button is clicked
+    submitted = tk.BooleanVar(value=False)
+    
+    # UI Elements
+    tk.Label(dialog, text=f"Settings for point:", font=("Arial", 10, "bold")).pack(pady=5)
+    tk.Label(dialog, text=f"X: {px:.2f}, Y: {py:.2f}", font=("Arial", 9)).pack()
     
     # Z-value input
-    z_frame = tk.Frame(dialog)
-    z_frame.pack(pady=10)
-    tk.Label(z_frame, text="Z-value (5-245 mm):").pack()
-    z_entry = tk.Entry(z_frame, width=10)
-    z_entry.insert(0, "200")
+    tk.Label(dialog, text="\nZ-value (5-245 mm):").pack()
+    z_entry = tk.Entry(dialog, width=15)
+    z_entry.insert(0, "200") # Default height
     z_entry.pack()
     
     # Claw control
-    claw_frame = tk.Frame(dialog)
-    claw_frame.pack(pady=10)
-    tk.Label(claw_frame, text="Claw State:").pack()
-    
-    claw_dialog_var = tk.IntVar(value=0)
-    radio_frame = tk.Frame(claw_frame)
+    tk.Label(dialog, text="\nClaw State:").pack()
+    claw_var_inner = tk.IntVar(value=0)
+    radio_frame = tk.Frame(dialog)
     radio_frame.pack()
-    tk.Radiobutton(radio_frame, text="OFF", variable=claw_dialog_var, value=0).pack(side=tk.LEFT, padx=10)
-    tk.Radiobutton(radio_frame, text="ON", variable=claw_dialog_var, value=1).pack(side=tk.LEFT, padx=10)
+    tk.Radiobutton(radio_frame, text="OFF", variable=claw_var_inner, value=0).pack(side=tk.LEFT)
+    tk.Radiobutton(radio_frame, text="ON", variable=claw_var_inner, value=1).pack(side=tk.LEFT)
     
-    # Buttons
-    button_frame = tk.Frame(dialog)
-    button_frame.pack(pady=20)
-    
+    # Internal function for the button click
     def add_point_clicked():
         try:
             z_val = float(z_entry.get())
             if 5.0 <= z_val <= 245.0:
-                #result['z'] = z_val
-                #result['claw'] = claw_dialog_var.get()
+                # SAVE the values into our result dictionary
+                result['z'] = z_val
+                result['claw'] = claw_var_inner.get()
+                
+                # Signal that we are done and close window
+                submitted.set(True)
                 dialog.destroy()
             else:
-                messagebox.showerror("Invalid Z-Value", "Z-value must be between 5 and 245 mm")
+                messagebox.showerror("Invalid Z", "Z must be between 5 and 245")
         except ValueError:
-            messagebox.showerror("Invalid Input", "Please enter a valid numeric Z-value")
+            messagebox.showerror("Invalid Input", "Please enter a numeric Z-value")
     
     def cancel_clicked():
+        # result['z'] remains None, so the point won't be saved
+        submitted.set(True) # Set to true just to break the wait loop
         dialog.destroy()
+
+    # Buttons
+    btn_frame = tk.Frame(dialog)
+    btn_frame.pack(pady=20)
+    tk.Button(btn_frame, text="Add Point", command=add_point_clicked, bg="lightgreen", width=10).pack(side=tk.LEFT, padx=5)
+    tk.Button(btn_frame, text="Cancel", command=cancel_clicked, bg="lightcoral", width=10).pack(side=tk.LEFT, padx=5)
     
-    tk.Button(button_frame, text="Add Point", command=add_point_clicked, bg="lightgreen").pack(side=tk.LEFT, padx=10)
-    tk.Button(button_frame, text="Cancel", command=cancel_clicked, bg="lightcoral").pack(side=tk.LEFT, padx=10)
+    # CRITICAL: This pauses the main script until 'submitted' is set to True
+    # Without this, the function returns result={'z':None} immediately.
+    root.wait_variable(submitted)
     
-    # Wait for dialog to close
-    dialog.wait_window()
     return result
 
 # Event handler for clicking on the plot
