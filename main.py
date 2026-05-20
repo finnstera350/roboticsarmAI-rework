@@ -1,3 +1,5 @@
+
+
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -236,6 +238,11 @@ def is_inside(px, py):
 valid_points = []  # Will store tuples of (px, py, z, claw_state)
 valid_scatters = []
 
+# Global references for Joint Entry boxes
+j1_entry = None
+j2_entry = None
+zj_entry = None
+
 # Tkinter app setup
 root = tk.Tk()
 root.title("Arm Manual Control Interface")
@@ -252,9 +259,10 @@ left_container.pack(side=tk.LEFT, fill=tk.BOTH, expand=1)
 manual_frame = tk.Frame(left_container)
 manual_frame.pack(fill=tk.X, padx=5, pady=5)
 
-tk.Label(manual_frame, text="Manual Point Input", font=("Arial", 12, "bold"), ).pack(pady=5)
+# Main Title
+tk.Label(manual_frame, text="Manual Control Interface", font=("Arial", 12, "bold")).pack(pady=5)
 
-# Input fields frame
+# --- ROW 1: MANUAL POINT INPUT (XYZ) ---
 input_fields_frame = tk.Frame(manual_frame)
 input_fields_frame.pack(pady=5)
 
@@ -277,26 +285,62 @@ z_frame = tk.Frame(input_fields_frame)
 z_frame.pack(side=tk.LEFT, padx=10)
 tk.Label(z_frame, text="Z (mm):").pack()
 z_manual_entry = tk.Entry(z_frame, width=8)
-z_manual_entry.insert(0, "200")  # Default value
+z_manual_entry.insert(0, "200")
 z_manual_entry.pack()
 
-# Claw control frame
+# Claw control (XYZ Row)
 claw_frame = tk.Frame(input_fields_frame)
 claw_frame.pack(side=tk.LEFT, padx=10)
 tk.Label(claw_frame, text="Claw:").pack()
-
-# Radio buttons for claw control
-claw_var = tk.IntVar(value=0)  # Default to OFF (0)
+claw_var = tk.IntVar(value=0)
 claw_radio_frame = tk.Frame(claw_frame)
 claw_radio_frame.pack()
+tk.Radiobutton(claw_radio_frame, text="OFF", variable=claw_var, value=0).pack(side=tk.LEFT)
+tk.Radiobutton(claw_radio_frame, text="ON", variable=claw_var, value=1).pack(side=tk.LEFT)
 
-tk.Radiobutton(claw_radio_frame, text="OFF", variable=claw_var, value=0, ).pack(side=tk.LEFT)
-tk.Radiobutton(claw_radio_frame, text="ON", variable=claw_var, value=1, ).pack(side=tk.LEFT)
-
-# Add manual point button
-add_manual_button = tk.Button(input_fields_frame, text="Add Point", command=lambda: add_manual_point(), 
-                             bg="lightgreen", padx=20)
+# Add Point Button (Inline with Row 1)
+add_manual_button = tk.Button(input_fields_frame, text="Add Point", 
+                              command=lambda: add_manual_point(), 
+                              bg="lightgreen", padx=20)
 add_manual_button.pack(side=tk.LEFT, padx=20)
+
+# --- Visual Separator ---
+tk.Frame(manual_frame, height=2, bd=1, relief=tk.SUNKEN).pack(fill=tk.X, padx=10, pady=10)
+
+# --- ROW 2: MANUAL JOINT CONTROL (J1, J2, Z) ---
+joint_fields_frame = tk.Frame(manual_frame)
+joint_fields_frame.pack(pady=5)
+
+# J1 Entry
+f1 = tk.Frame(joint_fields_frame); f1.pack(side=tk.LEFT, padx=10)
+tk.Label(f1, text="J1 (deg):").pack()
+j1_entry = tk.Entry(f1, width=8); j1_entry.pack()
+
+# J2 Entry
+f2 = tk.Frame(joint_fields_frame); f2.pack(side=tk.LEFT, padx=10)
+tk.Label(f2, text="J2 (deg):").pack()
+j2_entry = tk.Entry(f2, width=8); j2_entry.pack()
+
+# Z (Joint) Entry
+f3 = tk.Frame(joint_fields_frame); f3.pack(side=tk.LEFT, padx=10)
+tk.Label(f3, text="Z (mm):").pack()
+zj_entry = tk.Entry(f3, width=8); zj_entry.insert(0, "200"); zj_entry.pack()
+
+# Claw control (Joint Row)
+claw_frame_j = tk.Frame(joint_fields_frame)
+claw_frame_j.pack(side=tk.LEFT, padx=10)
+tk.Label(claw_frame_j, text="Claw:").pack()
+claw_var_j = tk.IntVar(value=0)
+claw_radio_frame_j = tk.Frame(claw_frame_j)
+claw_radio_frame_j.pack()
+tk.Radiobutton(claw_radio_frame_j, text="OFF", variable=claw_var_j, value=0).pack(side=tk.LEFT)
+tk.Radiobutton(claw_radio_frame_j, text="ON", variable=claw_var_j, value=1).pack(side=tk.LEFT)
+
+# Move Joints Button (Inline with Row 2)
+move_j_btn = tk.Button(joint_fields_frame, text="Move Joints", 
+                       command=lambda: manual_joint_move(), 
+                       bg="lightblue", padx=20)
+move_j_btn.pack(side=tk.LEFT, padx=20)
 
 # Create a graph to plot the valid region
 fig, ax = plt.subplots(figsize=(4,4))
@@ -707,6 +751,31 @@ def onclick(event):
 def remove_invalid_point(scatter):
     scatter.remove()
     canvas.draw()
+
+def manual_joint_move():
+    global robot, ROBOT_CONNECTED
+    
+    # physical limits for M1 Pro
+    J1_MIN, J1_MAX = -85.0, 85.0
+    J2_MIN, J2_MAX = -135.0, 135.0
+    Z_MIN, Z_MAX = 5.0, 245.0
+    J4_FIXED = -35.0 
+
+    try:
+        j1 = float(j1_entry.get())
+        j2 = float(j2_entry.get())
+        z = float(zj_entry.get())
+
+        if not (J1_MIN <= j1 <= J1_MAX and J2_MIN <= j2 <= J2_MAX and Z_MIN <= z <= Z_MAX):
+            messagebox.showerror("Out of Range", "Joint values outside limits!")
+            return
+
+        if ROBOT_CONNECTED and robot:
+            robot.movement.joint_to_joint_move([j1, j2, z, J4_FIXED])
+        else:
+            messagebox.showinfo("Demo Mode", f"Moving to J1:{j1} J2:{j2} Z:{z}")
+    except ValueError:
+        messagebox.showerror("Input Error", "Please enter valid numbers for joints.")
 
 # Connect the click event
 fig.canvas.mpl_connect('button_press_event', onclick)

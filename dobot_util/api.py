@@ -143,6 +143,15 @@ class Dashboard(DobotSocketConnection):
     def enable(self) -> Optional[DobotError]:
         opt_error, ret_val = self.send_command("EnableRobot()")
         return opt_error
+    
+    def clear_error(self) -> Optional[DobotError]:
+        """
+        Clears the alarms of the robot. 
+        After clearing, you may need to call 'continue_script' or 'continue' 
+        to restart the motion queue. [cite: 456, 459]
+        """
+        opt_error, ret_val = self.send_command("ClearError()")
+        return opt_error
 
     def disable(self) -> Optional[DobotError]:
         opt_error, ret_val = self.send_command("DisableRobot()")
