@@ -204,12 +204,42 @@ def move_to_point(x, y, z=200, r=0):
             robot.dashboard.enable()
             print(f"Moving to ({x},{y}) | Joints: J1={j1:.1f}°, J2={j2:.1f}°")
             robot.movement.joint_to_joint_move([j1, j2, z_target, r_target])
+            # --- ADD THESE TWO LINES TO SYNC ---
+            m_x, m_y, m_z = x, y, z 
+            # -----------------------------------
         else:
             print(f"DEMO MODE: Target ({x}, {y}) -> Joints J1={j1:.1f}°, J2={j2:.1f}°")
-            
+            # --- ADD THESE TWO LINES TO SYNC ---
+            m_x, m_y, m_z = x, y, z 
+            # -----------------------------------
     except Exception as e:
         print(f"Robot command failed: {e}")
 
+
+# --- MANUAL CONTROL STATE ---
+m_x, m_y, m_z = 250.0, 0.0, 200.0 
+m_claw = 0 
+
+def handle_manual_move(dx, dy):
+    if not manual_active.get(): return # This will work once manual_active is created below
+    global m_x, m_y
+    m_x += dx
+    m_y += dy
+    move_to_point(m_x, m_y, m_z)
+
+def handle_manual_z(dz):
+    if not manual_active.get(): return
+    global m_z
+    m_z = max(5.0, min(245.0, m_z + dz))
+    move_to_point(m_x, m_y, m_z)
+
+def handle_manual_claw():
+    if not manual_active.get(): return
+    global m_claw
+    m_claw = 1 if m_claw == 0 else 0
+    if ROBOT_CONNECTED and robot:
+        robot.dashboard.set_digital_output(1, m_claw)
+    claw_overdrive_btn.config(text=f"Claw: {'ON' if m_claw else 'OFF'}", bg="green" if m_claw else "red")
 
 limit = 450
 x = np.linspace(-limit, limit, 1000)
@@ -243,9 +273,12 @@ j1_entry = None
 j2_entry = None
 zj_entry = None
 
-# Tkinter app setup
 root = tk.Tk()
-root.title("Arm Manual Control Interface")
+root.title("Robotic Arm Control")
+
+# INITIALIZE HERE - This prevents the "Too early" error
+global manual_active
+manual_active = tk.BooleanVar(value=False)
 
 # Create main container
 main_container = tk.Frame(root)
@@ -258,6 +291,24 @@ left_container.pack(side=tk.LEFT, fill=tk.BOTH, expand=1)
 # Manual input frame (above the plot)
 manual_frame = tk.Frame(left_container)
 manual_frame.pack(fill=tk.X, padx=5, pady=5)
+
+
+# --- MANUAL OVERDRIVE UI ---
+overdrive_frame = tk.LabelFrame(manual_frame, text="Keyboard & Manual Overdrive", padx=10, pady=10)
+overdrive_frame.pack(fill=tk.X, padx=10, pady=5)
+
+# Safety Toggle (Must be ON for keys/buttons to work)
+tk.Checkbutton(overdrive_frame, text="Enable Keyboard Control", variable=manual_active, 
+               font=("Arial", 10, "bold"), fg="darkblue").grid(row=0, column=0, columnspan=3, pady=5)
+
+# Z Control Buttons
+tk.Button(overdrive_frame, text="Z Up (W)", width=10, command=lambda: handle_manual_z(10)).grid(row=1, column=0, padx=5)
+tk.Button(overdrive_frame, text="Z Down (S)", width=10, command=lambda: handle_manual_z(-10)).grid(row=1, column=1, padx=5)
+
+# Claw Toggle Button
+claw_overdrive_btn = tk.Button(overdrive_frame, text="Claw: OFF", width=12, bg="red", fg="white", 
+                               command=handle_manual_claw)
+claw_overdrive_btn.grid(row=1, column=2, padx=5)
 
 # Main Title
 tk.Label(manual_frame, text="Manual Control Interface", font=("Arial", 12, "bold")).pack(pady=5)
@@ -785,5 +836,15 @@ instructions = tk.Label(frame, text="Instructions:\n1. Click points on plot OR\n
                        justify=tk.LEFT, font=("Arial", 9), bg="lightyellow")
 instructions.pack(pady=10)
 
+# --- KEYBOARD BINDINGS ---
+root.bind("<Up>",    lambda e: handle_manual_move(10, 0))   # Move X+
+root.bind("<Down>",  lambda e: handle_manual_move(-10, 0))  # Move X-
+root.bind("<Left>",  lambda e: handle_manual_move(0, 10))   # Move Y+
+root.bind("<Right>", lambda e: handle_manual_move(0, -10))  # Move Y-
+root.bind("<w>",     lambda e: handle_manual_z(10))         # Move Z Up
+root.bind("<s>",     lambda e: handle_manual_z(-10))        # Move Z Down
+
 root.mainloop()
+
+
 
